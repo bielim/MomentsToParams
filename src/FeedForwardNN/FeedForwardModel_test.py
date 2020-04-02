@@ -80,7 +80,7 @@ class Data(Dataset):
 
 # Read csv file containing data samples
 # Columns are: M1, M2, alpha, theta
-all_data = genfromtxt('training_data_gamma_M1_M2.csv', delimiter=',', 
+all_data = genfromtxt('../../data/training_data_gamma_M1_M2.csv', delimiter=',', 
                       skip_header=1)
 np.random.shuffle(all_data)
 trainx_all = all_data[:, :3] # M1, M2
