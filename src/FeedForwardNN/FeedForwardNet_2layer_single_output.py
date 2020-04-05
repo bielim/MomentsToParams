@@ -8,7 +8,7 @@ from numpy import genfromtxt # to read csv data file
 import scipy.stats as stats 
 import time
 import copy
-from utils_test import zscore
+from utils import zscore
 
 # PyTorch
 import torch
@@ -20,7 +20,8 @@ from torch.utils.data import Dataset
 ### *********************************************************************** ###
 ###                                                                         ### 
 ###              Feedforward Neural Network for Regression                  ###
-###                                                                         ###
+###                  --- Single-output, One Layer ---                       ###
+###                                                                         ### 
 ### *********************************************************************** ### 
 
 ### GOAL: Learn map from the first and second moment (M1, M2) of a Gamma 
@@ -35,6 +36,8 @@ test_fraction = 0.1   # fraction of total samples used for testing
 valid_fraction = 0.2  # fraction of training data used for validation
 N_epochs = 100        # number of epochs
 batch_size = 512      # batch size
+target_param = 'alpha' # parameter to predict ('alpha' or 'theta')
+model_name = 'FeedForwardNet_2layer_single_output_' + target_param 
 
 
 ### ------
@@ -45,14 +48,14 @@ class FeedForwardNet(torch.nn.Module):
         # Note: super is shortcut to access a base class without having to know 
         # its type or name.
         super(FeedForwardNet, self).__init__()
-        self.w1 = torch.nn.Linear(D_in, H1)
-        self.w2 = torch.nn.Linear(H1, D_out)
+        self.linear1 = torch.nn.Linear(D_in, H1)
+        self.linear2 = torch.nn.Linear(H1, D_out)
 
         self.bn1 = torch.nn.BatchNorm1d(H1)
 
     def forward(self, x):
-        h1 = F.leaky_relu(self.bn1(self.w1(x)))
-        y_pred = self.w2(h1)
+        h1 = F.leaky_relu(self.bn1(self.linear1(x)))
+        y_pred = self.linear2(h1)
         return y_pred
     
 
@@ -83,9 +86,13 @@ class Data(Dataset):
 all_data = genfromtxt('../../data/training_data_gamma_M1_M2.csv', delimiter=',', 
                       skip_header=1)
 np.random.shuffle(all_data)
-trainx_all = all_data[:, :3] # M1, M2
-trainy_all = all_data[:, -2] # -2 for alpha, -1 for theta, or -2: for both
-                         
+trainx_all = all_data[:, :2] # M1, M2
+if target_param == 'alpha':
+    trainy_all = all_data[:, -2]
+elif target_param == 'theta':
+    trainy_all = all_data[:, -1]
+else:
+    raise ValueError('target_param has to be either alpha or theta')
 X_temp, X_test, y_temp, y_test = train_test_split(trainx_all, trainy_all, 
                                                   test_size=test_fraction, 
                                                   random_state=42)
@@ -123,7 +130,6 @@ def train_model(model, dset_loaders, dset_sizes, criterion, optimizer,
     best_loss = np.Inf 
 
     for epoch in range(N_epochs):
-        logs = {}
         print('Epoch {}/{}'.format(epoch, N_epochs - 1))
         print('-' * 10)
 
@@ -210,7 +216,7 @@ trained_model, cost = train_model(model, dset_loaders, dset_sizes, criterion,
                                   optimizer, lr_scheduler, N_epochs=N_epochs)
 
 # Save model
-torch.save(trained_model.state_dict(), 'FeedForwardNet.pt')
+torch.save(trained_model.state_dict(), '../../output/' + model_name + '.pt')
 
 
 ### ------
@@ -227,7 +233,8 @@ ax.set_xlabel('epoch')
 ax.set_ylabel('cost')
 plt.legend()
 plt.show()
-fig.savefig('train_and_valid_cost.png')
+fig_name = model_name + '_train_and_valid_cost.png'
+fig.savefig('../../plots/' + fig_name)
 
 # Compute performance on the test set
 model.eval()
